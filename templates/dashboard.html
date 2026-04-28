@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — QuizHub</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --bg: #0f172a;
+            --glass: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Outfit', sans-serif; }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .container { max-width: 1000px; margin: 0 auto; }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3rem;
+        }
+
+        .user-info h2 { font-weight: 800; font-size: 2rem; }
+        .user-info p { color: var(--text-dim); }
+
+        .btn-logout {
+            padding: 8px 16px;
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-logout:hover { background: #ef4444; color: white; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .stat-card {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            padding: 1.5rem;
+            border-radius: 20px;
+            text-align: center;
+        }
+
+        .stat-card .value { font-size: 2rem; font-weight: 800; color: var(--primary); display: block; }
+        .stat-card .label { font-size: 0.9rem; color: var(--text-dim); }
+
+        .section-title { margin-bottom: 1.5rem; font-size: 1.5rem; font-weight: 700; }
+
+        .categories-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 4rem;
+        }
+
+        .category-card {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .category-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .category-icon { font-size: 3rem; margin-bottom: 1rem; display: block; }
+
+        .recent-results {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 2rem;
+        }
+
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 0;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .result-item:last-child { border-bottom: none; }
+
+        .result-info h4 { font-weight: 600; }
+        .result-info p { font-size: 0.8rem; color: var(--text-dim); }
+
+        .score-badge {
+            background: var(--primary);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        /* ─── MOBILE RESPONSIVE ─── */
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+
+            header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+                margin-bottom: 2rem;
+            }
+
+            .user-info h2 {
+                font-size: 1.5rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+                margin-bottom: 2rem;
+            }
+
+            .stat-card {
+                padding: 1rem;
+                border-radius: 16px;
+            }
+
+            .stat-card .value {
+                font-size: 1.5rem;
+            }
+
+            .categories-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+                margin-bottom: 2.5rem;
+            }
+
+            .category-card {
+                padding: 1.5rem;
+                border-radius: 18px;
+            }
+
+            .category-icon {
+                font-size: 2.5rem;
+            }
+
+            .section-title {
+                font-size: 1.2rem;
+                margin-bottom: 1rem;
+            }
+
+            .recent-results {
+                padding: 1rem;
+                border-radius: 18px;
+            }
+
+            .result-item {
+                padding: 0.75rem 0;
+            }
+
+            .result-info h4 {
+                font-size: 0.95rem;
+            }
+        }
+
+        @media (max-width: 400px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .btn-logout {
+                padding: 6px 12px;
+                font-size: 0.85rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="user-info">
+                <h2 id="welcome-msg">Salom!</h2>
+                <p>Bugun bilimingizni qay darajada sinamoqchisiz?</p>
+            </div>
+            <div style="display: flex; gap: 1rem;">
+                <button onclick="window.location.href='/profile'" class="btn-logout" style="color: #6366f1; border-color: #6366f1; background: transparent;">Profil</button>
+                <button onclick="handleLogout()" class="btn-logout">Chiqish</button>
+            </div>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span class="value" id="stat-tests">0</span>
+                <span class="label">Topshirilgan testlar</span>
+            </div>
+            <div class="stat-card">
+                <span class="value" id="stat-avg">0%</span>
+                <span class="label">O'rtacha natija</span>
+            </div>
+            <div class="stat-card">
+                <span class="value" id="stat-best">0%</span>
+                <span class="label">Eng yaxshi natija</span>
+            </div>
+        </div>
+
+        <h3 class="section-title">Kategoriyalar</h3>
+        <div class="categories-grid" id="categories-container">
+            <!-- Categories will be loaded here -->
+        </div>
+
+        <h3 class="section-title">So'nggi natijalar</h3>
+        <div class="recent-results" id="results-container">
+            <!-- Results will be loaded here -->
+        </div>
+    </div>
+
+    <script>
+        async function loadDashboardData() {
+            const response = await fetch('/api/dashboard-data');
+            const data = await response.json();
+
+            if (data.error) { window.location.href = '/'; return; }
+
+            document.getElementById('welcome-msg').textContent = `Salom, ${data.username}!`;
+            document.getElementById('stat-tests').textContent = data.stats.total_tests || 0;
+            document.getElementById('stat-avg').textContent = (data.stats.avg_score || 0).toFixed(1) + '%';
+            document.getElementById('stat-best').textContent = (data.stats.best_score || 0).toFixed(1) + '%';
+
+            const catContainer = document.getElementById('categories-container');
+            catContainer.innerHTML = data.categories.map(cat => `
+                <div class="category-card" onclick="window.location.href='/quiz/${cat.id}'">
+                    <span class="category-icon">${cat.icon}</span>
+                    <h3>${cat.name}</h3>
+                    <p style="color: var(--text-dim); font-size: 0.8rem; margin-top: 0.5rem;">Boshlash uchun bosing</p>
+                </div>
+            `).join('');
+
+            const resContainer = document.getElementById('results-container');
+            if (data.results.length === 0) {
+                resContainer.innerHTML = '<p style="text-align: center; color: var(--text-dim);">Hali natijalar mavjud emas.</p>';
+            } else {
+                resContainer.innerHTML = data.results.map(res => `
+                    <div class="result-item">
+                        <div class="result-info">
+                            <h4>${res.icon} ${res.category_name}</h4>
+                            <p>${new Date(res.taken_at).toLocaleString()}</p>
+                        </div>
+                        <div class="score-badge">${res.percentage}%</div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        async function handleLogout() {
+            await fetch('/api/logout', { method: 'POST' });
+            window.location.href = '/';
+        }
+
+        loadDashboardData();
+    </script>
+</body>
+</html>

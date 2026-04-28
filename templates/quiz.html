@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz — QuizHub</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --bg: #0f172a;
+            --glass: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Outfit', sans-serif; }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container { width: 100%; max-width: 800px; }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            background: var(--glass);
+            padding: 1rem 2rem;
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+        }
+
+        .timer { font-size: 1.5rem; font-weight: 800; color: #fbbf24; }
+
+        .quiz-card {
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 3rem;
+            margin-bottom: 2rem;
+            animation: slideIn 0.5s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .question-text { font-size: 1.5rem; font-weight: 600; margin-bottom: 2rem; min-height: 4rem; }
+
+        .options-grid { display: grid; gap: 1rem; }
+
+        .option-btn {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--glass-border);
+            padding: 1.25rem;
+            border-radius: 16px;
+            color: var(--text-main);
+            font-size: 1.1rem;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .option-btn:hover { background: rgba(99, 102, 241, 0.1); border-color: var(--primary); }
+        .option-btn.selected { background: var(--primary); border-color: var(--primary); color: white; }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            margin-bottom: 2rem;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .controls { display: flex; justify-content: space-between; margin-top: 2rem; }
+
+        button.btn-nav {
+            padding: 12px 24px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        button.btn-nav:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        /* Results view */
+        .results-view { display: none; text-align: center; }
+        .score-circle {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            border: 10px solid var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            font-weight: 800;
+            margin: 2rem auto;
+        }
+
+        /* ─── MOBILE RESPONSIVE ─── */
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+
+            .header {
+                padding: 0.75rem 1rem;
+                border-radius: 14px;
+                margin-bottom: 1.5rem;
+            }
+
+            .header h2 {
+                font-size: 1.1rem;
+            }
+
+            .timer {
+                font-size: 1.2rem;
+            }
+
+            .quiz-card {
+                padding: 1.5rem;
+                border-radius: 18px;
+                margin-bottom: 1.5rem;
+            }
+
+            .question-text {
+                font-size: 1.1rem;
+                min-height: auto;
+                margin-bottom: 1.5rem;
+            }
+
+            .option-btn {
+                padding: 1rem;
+                font-size: 0.95rem;
+                border-radius: 12px;
+            }
+
+            .controls {
+                margin-top: 1.5rem;
+            }
+
+            button.btn-nav {
+                padding: 10px 18px;
+                font-size: 0.9rem;
+                border-radius: 10px;
+            }
+
+            .score-circle {
+                width: 120px;
+                height: 120px;
+                font-size: 2.2rem;
+                border-width: 8px;
+            }
+
+            .progress-bar {
+                margin-bottom: 1.5rem;
+            }
+        }
+
+        @media (max-width: 400px) {
+            .header {
+                flex-direction: column;
+                gap: 0.5rem;
+                text-align: center;
+            }
+
+            .question-text {
+                font-size: 1rem;
+            }
+
+            .option-btn {
+                padding: 0.85rem;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="quiz-container">
+        <div class="header">
+            <h2 id="cat-name">Yuklanmoqda...</h2>
+            <div class="timer" id="timer">00:00</div>
+        </div>
+
+        <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+        </div>
+
+        <div class="quiz-card">
+            <div id="quiz-ui">
+                <p class="question-text" id="question-text">Savol yuklanmoqda...</p>
+                <div class="options-grid" id="options-container">
+                    <!-- Options -->
+                </div>
+                <div class="controls">
+                    <button class="btn-nav" id="prev-btn" onclick="prevQuestion()" disabled>Oldingi</button>
+                    <span id="q-counter">1 / 8</span>
+                    <button class="btn-nav" id="next-btn" onclick="nextQuestion()">Keyingi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Modal/View -->
+    <div class="container results-view" id="results-view">
+        <div class="quiz-card">
+            <h2 style="font-size: 2.5rem; margin-bottom: 1rem;">Natija</h2>
+            <div class="score-circle" id="final-score">0%</div>
+            <p id="score-text" style="font-size: 1.2rem; color: var(--text-dim); margin-bottom: 2rem;">...</p>
+            <button class="btn-nav" onclick="window.location.href='/dashboard'">Asosiy sahifaga qaytish</button>
+        </div>
+    </div>
+
+    <script>
+        let questions = [];
+        let currentIndex = 0;
+        let answers = {};
+        let startTime = Date.now();
+        let timerInterval;
+
+        const catId = window.location.pathname.split('/').pop();
+
+        async function startQuiz() {
+            const response = await fetch(`/api/questions/${catId}`);
+            const data = await response.json();
+
+            if (data.error) { alert(data.error); window.location.href='/dashboard'; return; }
+
+            questions = data.questions;
+            document.getElementById('cat-name').textContent = data.category.name;
+            renderQuestion();
+            startTimer();
+        }
+
+        function renderQuestion() {
+            const q = questions[currentIndex];
+            document.getElementById('question-text').textContent = q.question;
+            document.getElementById('q-counter').textContent = `${currentIndex + 1} / ${questions.length}`;
+            document.getElementById('progress-fill').style.width = `${((currentIndex + 1) / questions.length) * 100}%`;
+
+            const container = document.getElementById('options-container');
+            container.innerHTML = '';
+
+            ['A', 'B', 'C', 'D'].forEach(key => {
+                const btn = document.createElement('div');
+                btn.className = `option-btn ${answers[q.id] === key ? 'selected' : ''}`;
+                btn.textContent = `${key}) ${q['option_' + key.toLowerCase()]}`;
+                btn.onclick = () => selectOption(q.id, key);
+                container.appendChild(btn);
+            });
+
+            document.getElementById('prev-btn').disabled = currentIndex === 0;
+            document.getElementById('next-btn').textContent = currentIndex === questions.length - 1 ? 'Tugatish' : 'Keyingi';
+        }
+
+        function selectOption(qId, option) {
+            answers[qId] = option;
+            renderQuestion();
+        }
+
+        function nextQuestion() {
+            if (currentIndex < questions.length - 1) {
+                currentIndex++;
+                renderQuestion();
+            } else {
+                submitQuiz();
+            }
+        }
+
+        function prevQuestion() {
+            if (currentIndex > 0) {
+                currentIndex--;
+                renderQuestion();
+            }
+        }
+
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+                const ss = String(elapsed % 60).padStart(2, '0');
+                document.getElementById('timer').textContent = `${mm}:${ss}`;
+            }, 1000);
+        }
+
+        async function submitQuiz() {
+            clearInterval(timerInterval);
+            const timeTaken = Math.floor((Date.now() - startTime) / 1000);
+
+            const response = await fetch('/api/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    category_id: catId,
+                    answers: answers,
+                    time_taken: timeTaken
+                })
+            });
+
+            const data = await response.json();
+            showResults(data);
+        }
+
+        function showResults(data) {
+            document.getElementById('quiz-container').style.display = 'none';
+            document.getElementById('results-view').style.display = 'block';
+            document.getElementById('final-score').textContent = data.percentage + '%';
+            document.getElementById('score-text').textContent = 
+                `${data.total} tadan ${data.score} ta to'g'ri javob.`;
+        }
+
+        startQuiz();
+    </script>
+</body>
+</html>
