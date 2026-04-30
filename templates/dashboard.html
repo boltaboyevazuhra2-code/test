@@ -123,6 +123,60 @@
             font-weight: 600;
         }
 
+        .result-item {
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .result-item:hover {
+            background: rgba(255,255,255,0.02);
+            border-radius: 12px;
+        }
+
+        /* ─── MODAL ─── */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: var(--bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            width: 100%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 2rem;
+            position: relative;
+        }
+        .close-btn {
+            position: absolute;
+            top: 1.5rem; right: 1.5rem;
+            background: none; border: none;
+            color: var(--text-dim);
+            font-size: 1.5rem; cursor: pointer;
+        }
+        .close-btn:hover { color: var(--text-main); }
+        .feedback-item {
+            background: var(--glass);
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            border: 1px solid var(--glass-border);
+        }
+        .feedback-item.correct { border-color: rgba(34, 197, 94, 0.5); }
+        .feedback-item.incorrect { border-color: rgba(239, 68, 68, 0.5); }
+        .feedback-q { font-weight: 600; margin-bottom: 0.5rem; }
+        .feedback-ans { font-size: 0.9rem; margin-top: 0.25rem; }
+        .ans-correct { color: #22c55e; }
+        .ans-incorrect { color: #ef4444; }
+
         /* ─── MOBILE RESPONSIVE ─── */
         @media (max-width: 768px) {
             body {
@@ -208,7 +262,7 @@
                 <h2 id="welcome-msg">Salom!</h2>
                 <p>Bugun bilimingizni qay darajada sinamoqchisiz?</p>
             </div>
-            <div style="display: flex; gap: 1rem;">
+            <div style="display: flex; gap: 1rem;" id="nav-buttons">
                 <button onclick="window.location.href='/profile'" class="btn-logout" style="color: #6366f1; border-color: #6366f1; background: transparent;">Profil</button>
                 <button onclick="handleLogout()" class="btn-logout">Chiqish</button>
             </div>
@@ -240,6 +294,18 @@
         </div>
     </div>
 
+    <!-- Natija Tafsilotlari Modali -->
+    <div class="modal" id="resultModal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="closeModal()">×</button>
+            <h2 id="modal-title" style="margin-bottom: 0.5rem;">Test Natijasi</h2>
+            <p id="modal-score" style="color: var(--text-dim); margin-bottom: 1.5rem;"></p>
+            <div id="modal-feedback">
+                <!-- Feedback loaded here -->
+            </div>
+        </div>
+    </div>
+
     <script>
         async function loadDashboardData() {
             const response = await fetch('/api/dashboard-data');
@@ -251,6 +317,18 @@
             document.getElementById('stat-tests').textContent = data.stats.total_tests || 0;
             document.getElementById('stat-avg').textContent = (data.stats.avg_score || 0).toFixed(1) + '%';
             document.getElementById('stat-best').textContent = (data.stats.best_score || 0).toFixed(1) + '%';
+
+            if (data.is_admin) {
+                const navBtns = document.getElementById('nav-buttons');
+                const adminBtn = document.createElement('button');
+                adminBtn.className = 'btn-logout';
+                adminBtn.style.color = '#10b981';
+                adminBtn.style.borderColor = '#10b981';
+                adminBtn.style.background = 'transparent';
+                adminBtn.textContent = 'Admin Panel';
+                adminBtn.onclick = () => window.location.href = '/admin';
+                navBtns.insertBefore(adminBtn, navBtns.firstChild);
+            }
 
             const catContainer = document.getElementById('categories-container');
             catContainer.innerHTML = data.categories.map(cat => `
@@ -266,7 +344,7 @@
                 resContainer.innerHTML = '<p style="text-align: center; color: var(--text-dim);">Hali natijalar mavjud emas.</p>';
             } else {
                 resContainer.innerHTML = data.results.map(res => `
-                    <div class="result-item">
+                    <div class="result-item" onclick="openResultModal(${res.id})">
                         <div class="result-info">
                             <h4>${res.icon} ${res.category_name}</h4>
                             <p>${new Date(res.taken_at).toLocaleString()}</p>
@@ -274,6 +352,69 @@
                         <div class="score-badge">${res.percentage}%</div>
                     </div>
                 `).join('');
+            }
+        }
+
+        async function openResultModal(resultId) {
+            const modal = document.getElementById('resultModal');
+            const feedbackContainer = document.getElementById('modal-feedback');
+            const title = document.getElementById('modal-title');
+            const scoreP = document.getElementById('modal-score');
+            
+            feedbackContainer.innerHTML = '<p style="text-align:center;">Yuklanmoqda...</p>';
+            modal.classList.add('active');
+
+            try {
+                const res = await fetch(`/api/results/${resultId}`);
+                const data = await res.json();
+                
+                if (data.error) {
+                    feedbackContainer.innerHTML = `<p style="color:#ef4444; text-align:center;">${data.error}</p>`;
+                    return;
+                }
+
+                title.textContent = `${data.category_name} - Natija`;
+                scoreP.innerHTML = `To'g'ri: <strong>${data.score}/${data.total}</strong> (${data.percentage}%)<br>Vaqt: ${data.time_taken} sek`;
+
+                if (!data.feedback || data.feedback.length === 0) {
+                    feedbackContainer.innerHTML = '<p style="text-align:center; color: var(--text-dim);">Batafsil ma\'lumot mavjud emas.</p>';
+                    return;
+                }
+
+                feedbackContainer.innerHTML = data.feedback.map((f, i) => {
+                    const isCorr = f.is_correct;
+                    const cssClass = isCorr ? 'correct' : 'incorrect';
+                    const userAnsText = f.options[f.user_answer] || 'Kiritilmagan';
+                    const corrAnsText = f.options[f.correct_answer];
+                    
+                    return `
+                        <div class="feedback-item ${cssClass}">
+                            <div class="feedback-q" style="color: ${isCorr ? '#4ade80' : '#f87171'};">${i + 1}. ${f.question}</div>
+                            <div class="feedback-ans">
+                                Sening javobing: <span class="${isCorr ? 'ans-correct' : 'ans-incorrect'}">${f.user_answer} (${userAnsText})</span>
+                            </div>
+                            ${!isCorr ? `
+                                <div class="feedback-ans" style="margin-top: 4px;">
+                                    To'g'ri javob: <span class="ans-correct">${f.correct_answer} (${corrAnsText})</span>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('');
+
+            } catch (err) {
+                feedbackContainer.innerHTML = '<p style="color:#ef4444; text-align:center;">Xatolik yuz berdi.</p>';
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('resultModal').classList.remove('active');
+        }
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('resultModal');
+            if (event.target == modal) {
+                closeModal();
             }
         }
 

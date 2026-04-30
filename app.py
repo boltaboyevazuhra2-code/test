@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify, session, redirect, u
 import sqlite3
 import hashlib
 import os
+import json
 from datetime import datetime
 
 app = Flask(__name__)
@@ -19,48 +20,70 @@ def init_db():
     cur = conn.cursor()
 
     # Users table
-    cur.execute('''CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
-        email TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS users ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "username TEXT UNIQUE NOT NULL, "
+        "password TEXT NOT NULL, "
+        "email TEXT, "
+        "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+        "is_admin BOOLEAN DEFAULT 0"
+        ")"
+    )
+    
+    # Try to add is_admin column for existing database
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
 
     # Categories table
-    cur.execute('''CREATE TABLE IF NOT EXISTS categories (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        icon TEXT DEFAULT '📚'
-    )''')
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS categories ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "name TEXT NOT NULL, "
+        "icon TEXT DEFAULT '📚'"
+        ")"
+    )
 
     # Questions table
-    cur.execute('''CREATE TABLE IF NOT EXISTS questions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        category_id INTEGER,
-        question TEXT NOT NULL,
-        option_a TEXT NOT NULL,
-        option_b TEXT NOT NULL,
-        option_c TEXT NOT NULL,
-        option_d TEXT NOT NULL,
-        correct_answer TEXT NOT NULL,
-        difficulty TEXT DEFAULT 'medium',
-        FOREIGN KEY (category_id) REFERENCES categories(id)
-    )''')
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS questions ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "category_id INTEGER, "
+        "question TEXT NOT NULL, "
+        "option_a TEXT NOT NULL, "
+        "option_b TEXT NOT NULL, "
+        "option_c TEXT NOT NULL, "
+        "option_d TEXT NOT NULL, "
+        "correct_answer TEXT NOT NULL, "
+        "difficulty TEXT DEFAULT 'medium', "
+        "FOREIGN KEY (category_id) REFERENCES categories(id)"
+        ")"
+    )
 
     # Results table
-    cur.execute('''CREATE TABLE IF NOT EXISTS results (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        category_id INTEGER NOT NULL,
-        score INTEGER NOT NULL,
-        total INTEGER NOT NULL,
-        percentage REAL NOT NULL,
-        time_taken INTEGER DEFAULT 0,
-        taken_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id),
-        FOREIGN KEY (category_id) REFERENCES categories(id)
-    )''')
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS results ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "user_id INTEGER NOT NULL, "
+        "category_id INTEGER NOT NULL, "
+        "score INTEGER NOT NULL, "
+        "total INTEGER NOT NULL, "
+        "percentage REAL NOT NULL, "
+        "time_taken INTEGER DEFAULT 0, "
+        "taken_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+        "feedback TEXT, "
+        "FOREIGN KEY (user_id) REFERENCES users(id), "
+        "FOREIGN KEY (category_id) REFERENCES categories(id)"
+        ")"
+    )
+    
+    # Try to add feedback column for existing database
+    try:
+        cur.execute("ALTER TABLE results ADD COLUMN feedback TEXT")
+    except sqlite3.OperationalError:
+        pass
 
     # Seed categories
     cur.execute("SELECT COUNT(*) FROM categories")
@@ -128,9 +151,17 @@ def init_db():
             (5, "OOP'da 'encapsulation' nima?", "Meros olish", "Ma'lumotni yashirish", "Ko'p shakllilik", "Abstraksiya", "B", "medium"),
             (5, "Git 'commit' buyrug'i nima qiladi?", "Faylni o'chiradi", "O'zgarishlarni saqlaydi", "Repozitoriyni klonlaydi", "Yangi branch yaratadi", "B", "easy"),
         ]
-        cur.executemany("""INSERT INTO questions 
-            (category_id, question, option_a, option_b, option_c, option_d, correct_answer, difficulty)
-            VALUES (?,?,?,?,?,?,?,?)""", questions)
+        cur.executemany(
+            "INSERT INTO questions "
+            "(category_id, question, option_a, option_b, option_c, option_d, correct_answer, difficulty) "
+            "VALUES (?,?,?,?,?,?,?,?)", questions
+        )
+
+    # Seed default admin
+    cur.execute("SELECT COUNT(*) FROM users WHERE username='admin'")
+    if cur.fetchone()[0] == 0:
+        cur.execute("INSERT INTO users (username, password, email, is_admin) VALUES (?,?,?,?)",
+                     ('admin', hash_password('admin123'), 'admin@quizhub.com', 1))
 
     conn.commit()
     conn.close()
@@ -165,6 +196,7 @@ def register():
         user = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
         session['user_id'] = user['id']
         session['username'] = user['username']
+        session['is_admin'] = user['is_admin'] if 'is_admin' in user.keys() else 0
         return jsonify({'success': True, 'username': username})
     except sqlite3.IntegrityError:
         return jsonify({'error': 'Bu username band'}), 400
@@ -185,6 +217,7 @@ def login():
     if user:
         session['user_id'] = user['id']
         session['username'] = user['username']
+        session['is_admin'] = user['is_admin'] if 'is_admin' in user.keys() else 0
         return jsonify({'success': True, 'username': username})
     return jsonify({'error': 'Username yoki parol noto\'g\'ri'}), 401
 
@@ -210,25 +243,26 @@ def dashboard_data():
 
     categories = conn.execute("SELECT * FROM categories").fetchall()
 
-    results = conn.execute("""
-        SELECT r.*, c.name as category_name, c.icon
-        FROM results r JOIN categories c ON r.category_id = c.id
-        WHERE r.user_id = ?
-        ORDER BY r.taken_at DESC LIMIT 10
-    """, (user_id,)).fetchall()
+    results = conn.execute(
+        "SELECT r.*, c.name as category_name, c.icon "
+        "FROM results r JOIN categories c ON r.category_id = c.id "
+        "WHERE r.user_id = ? "
+        "ORDER BY r.taken_at DESC LIMIT 10", (user_id,)
+    ).fetchall()
 
-    stats = conn.execute("""
-        SELECT COUNT(*) as total_tests,
-               AVG(percentage) as avg_score,
-               MAX(percentage) as best_score,
-               SUM(score) as total_correct
-        FROM results WHERE user_id = ?
-    """, (user_id,)).fetchone()
+    stats = conn.execute(
+        "SELECT COUNT(*) as total_tests, "
+        "AVG(percentage) as avg_score, "
+        "MAX(percentage) as best_score, "
+        "SUM(score) as total_correct "
+        "FROM results WHERE user_id = ?", (user_id,)
+    ).fetchone()
 
     conn.close()
 
     return jsonify({
         'username': session['username'],
+        'is_admin': session.get('is_admin', 0),
         'categories': [dict(c) for c in categories],
         'results': [dict(r) for r in results],
         'stats': dict(stats) if stats else {}
@@ -248,11 +282,11 @@ def get_questions(category_id):
 
     conn = get_db()
     category = conn.execute("SELECT * FROM categories WHERE id=?", (category_id,)).fetchone()
-    questions = conn.execute("""
-        SELECT id, question, option_a, option_b, option_c, option_d, difficulty
-        FROM questions WHERE category_id=?
-        ORDER BY RANDOM() LIMIT 8
-    """, (category_id,)).fetchall()
+    questions = conn.execute(
+        "SELECT id, question, option_a, option_b, option_c, option_d, difficulty "
+        "FROM questions WHERE category_id=? "
+        "ORDER BY RANDOM() LIMIT 8", (category_id,)
+    ).fetchall()
     conn.close()
 
     if not category:
@@ -297,9 +331,13 @@ def submit_quiz():
 
     percentage = round(float(score) / total * 100, 1) if total > 0 else 0.0  # type: ignore
 
-    conn.execute("""INSERT INTO results (user_id, category_id, score, total, percentage, time_taken)
-                    VALUES (?,?,?,?,?,?)""",
-                 (session['user_id'], category_id, score, total, percentage, time_taken))
+    feedback_json = json.dumps(feedback)
+
+    conn.execute(
+        "INSERT INTO results (user_id, category_id, score, total, percentage, time_taken, feedback) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (session['user_id'], category_id, score, total, percentage, time_taken, feedback_json)
+    )
     conn.commit()
     conn.close()
 
@@ -309,6 +347,31 @@ def submit_quiz():
         'percentage': percentage,
         'feedback': feedback
     })
+
+@app.route('/api/results/<int:result_id>')
+def get_result_detail(result_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    conn = get_db()
+    result = conn.execute(
+        "SELECT r.*, c.name as category_name "
+        "FROM results r JOIN categories c ON r.category_id = c.id "
+        "WHERE r.id = ? AND r.user_id = ?",
+        (result_id, session['user_id'])
+    ).fetchone()
+    conn.close()
+
+    if not result:
+        return jsonify({'error': 'Natija topilmadi'}), 404
+
+    res_dict = dict(result)
+    try:
+        res_dict['feedback'] = json.loads(res_dict['feedback']) if res_dict['feedback'] else []
+    except Exception:
+        res_dict['feedback'] = []
+
+    return jsonify(res_dict)
 
 # ─── PROFILE ────────────────────────────────────────────────────
 @app.route('/profile')
@@ -325,29 +388,148 @@ def get_profile():
     user_id = session['user_id']
     conn = get_db()
 
-    user = conn.execute("SELECT id, username, email, created_at FROM users WHERE id=?", (user_id,)).fetchone()
+    user = conn.execute("SELECT id, username, email, created_at FROM users WHERE id = ?", (user_id,)).fetchone()
+    
+    results = conn.execute(
+        "SELECT r.*, c.name as category_name, c.icon "
+        "FROM results r JOIN categories c ON r.category_id = c.id "
+        "WHERE r.user_id = ? ORDER BY r.taken_at DESC", (user_id,)
+    ).fetchall()
 
-    results = conn.execute("""
-        SELECT r.*, c.name as category_name, c.icon
-        FROM results r JOIN categories c ON r.category_id = c.id
-        WHERE r.user_id = ? ORDER BY r.taken_at DESC
-    """, (user_id,)).fetchall()
-
-    category_stats = conn.execute("""
-        SELECT c.name, c.icon, COUNT(*) as attempts,
-               AVG(r.percentage) as avg_score, MAX(r.percentage) as best_score
-        FROM results r JOIN categories c ON r.category_id = c.id
-        WHERE r.user_id = ? GROUP BY r.category_id
-    """, (user_id,)).fetchall()
+    category_stats = conn.execute(
+        "SELECT c.name, c.icon, COUNT(*) as attempts, "
+        "AVG(r.percentage) as avg_score, MAX(r.percentage) as best_score "
+        "FROM results r JOIN categories c ON r.category_id = c.id "
+        "WHERE r.user_id = ? GROUP BY r.category_id", (user_id,)
+    ).fetchall()
 
     conn.close()
-
     return jsonify({
         'user': dict(user),
         'results': [dict(r) for r in results],
         'category_stats': [dict(s) for s in category_stats]
     })
+    
+# ─── ADMIN ROUTES ───────────────────────────────────────────────
+@app.route('/admin')
+def admin_panel():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return redirect(url_for('index'))
+    return render_template('admin.html')
 
+@app.route('/api/admin/questions', methods=['GET', 'POST'])
+def admin_questions():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    conn = get_db()
+    
+    if request.method == 'GET':
+        questions = conn.execute(
+            "SELECT q.*, c.name as category_name "
+            "FROM questions q "
+            "JOIN categories c ON q.category_id = c.id "
+            "ORDER BY q.id DESC"
+        ).fetchall()
+        categories = conn.execute("SELECT * FROM categories").fetchall()
+        conn.close()
+        return jsonify({
+            'questions': [dict(q) for q in questions],
+            'categories': [dict(c) for c in categories]
+        })
+        
+    elif request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        try:
+            conn.execute(
+                "INSERT INTO questions (category_id, question, option_a, option_b, option_c, option_d, correct_answer, difficulty) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)", 
+                (
+                int(data['category_id']), data['question'], data['option_a'], 
+                data['option_b'], data['option_c'], data['option_d'], 
+                data['correct_answer'], data.get('difficulty', 'medium')
+            ))
+            conn.commit()
+            conn.close()
+            return jsonify({'success': True})
+        except Exception as e:
+            conn.close()
+            return jsonify({'error': str(e)}), 400
+
+@app.route('/api/admin/questions/<int:q_id>', methods=['PUT', 'DELETE'])
+def admin_question_edit(q_id):
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+        
+    conn = get_db()
+    
+    if request.method == 'DELETE':
+        conn.execute("DELETE FROM questions WHERE id=?", (q_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True})
+        
+    elif request.method == 'PUT':
+        data = request.get_json(silent=True) or {}
+        try:
+            conn.execute(
+                "UPDATE questions "
+                "SET category_id=?, question=?, option_a=?, option_b=?, option_c=?, option_d=?, correct_answer=?, difficulty=? "
+                "WHERE id=?", 
+                (
+                int(data['category_id']), data['question'], data['option_a'], 
+                data['option_b'], data['option_c'], data['option_d'], 
+                data['correct_answer'], data.get('difficulty', 'medium'), q_id
+            ))
+            conn.commit()
+            conn.close()
+            return jsonify({'success': True})
+        except Exception as e:
+            conn.close()
+            return jsonify({'error': str(e)}), 400
+
+@app.route('/api/admin/categories', methods=['POST'])
+def admin_categories():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    data = request.get_json(silent=True) or {}
+    name = data.get('name')
+    icon = data.get('icon', '📚')
+    
+    if not name:
+        return jsonify({'error': 'Nomi kiritilishi shart'}), 400
+        
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT INTO categories (name, icon) VALUES (?, ?)", 
+            (name, icon)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True})
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/admin/categories/<int:c_id>', methods=['DELETE'])
+def admin_category_delete(c_id):
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM questions WHERE category_id=?", (c_id,))
+        conn.execute("DELETE FROM results WHERE category_id=?", (c_id,))
+        conn.execute("DELETE FROM categories WHERE id=?", (c_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True})
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': str(e)}), 400
+#
 try:
     from pyngrok import ngrok
 except ImportError:
@@ -356,7 +538,7 @@ except ImportError:
 if __name__ == '__main__':
     init_db()
     print("[OK] Ma'lumotlar bazasi tayyor!")
-    # ----- ngrok tunnel -----
+   # ----- ngrok tunnel -----
     if os.getenv('NGROK_TUNNEL') and ngrok:
         public_url = ngrok.connect(5000, "http")
         print(f"[NGROK] Public URL: {public_url}")
@@ -367,12 +549,3 @@ if __name__ == '__main__':
 # Set the environment variable NGROK_TUNNEL=1 before running the server, or simply uncomment the block below.
 # Remember to configure your ngrok auth token (ngrok authtoken <your-token>) once.
 
-if __name__ == '__main__':
-    init_db()
-    print("[OK] Ma'lumotlar bazasi tayyor!")
-    # ----- ngrok tunnel -----
-    if os.getenv('NGROK_TUNNEL'):
-        public_url = ngrok.connect(5000, "http")
-        print(f"[NGROK] Public URL: {public_url}")
-    print("[START] Server ishga tushdi: http://0.0.0.0:5000")
-    app.run(host='0.0.0.0', debug=True, port=5000)

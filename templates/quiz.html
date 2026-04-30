@@ -332,6 +332,51 @@
             document.getElementById('final-score').textContent = data.percentage + '%';
             document.getElementById('score-text').textContent = 
                 `${data.total} tadan ${data.score} ta to'g'ri javob.`;
+
+            // Display feedback
+            const feedbackContainer = document.createElement('div');
+            feedbackContainer.style.marginTop = '2rem';
+            feedbackContainer.style.textAlign = 'left';
+
+            data.feedback.forEach((item, index) => {
+                const qDiv = document.createElement('div');
+                qDiv.style.marginBottom = '1.5rem';
+                qDiv.style.padding = '1.5rem';
+                qDiv.style.background = 'rgba(255,255,255,0.03)';
+                qDiv.style.borderRadius = '16px';
+                qDiv.style.border = '1px solid var(--glass-border)';
+
+                const title = document.createElement('h3');
+                title.textContent = `${index + 1}. ${item.question}`;
+                title.style.marginBottom = '1rem';
+                title.style.color = item.is_correct ? '#4ade80' : '#f87171';
+                qDiv.appendChild(title);
+
+                const ansInfo = document.createElement('div');
+                ansInfo.style.fontSize = '1.1rem';
+                ansInfo.innerHTML = `
+                    <div style="margin-bottom: 0.5rem;">
+                        <span style="color: var(--text-dim);">Sizning javobingiz:</span> 
+                        <span style="color: ${item.is_correct ? '#4ade80' : '#f87171'}; font-weight: 600;">
+                            ${item.user_answer ? item.options[item.user_answer] : 'Belgilanmagan'}
+                        </span>
+                    </div>
+                    ${!item.is_correct ? `
+                    <div>
+                        <span style="color: var(--text-dim);">To'g'ri javob:</span> 
+                        <span style="color: #4ade80; font-weight: 600;">
+                            ${item.options[item.correct_answer]}
+                        </span>
+                    </div>` : ''}
+                `;
+                qDiv.appendChild(ansInfo);
+
+                feedbackContainer.appendChild(qDiv);
+            });
+
+            const resultsView = document.getElementById('results-view');
+            const returnBtn = resultsView.querySelector('button');
+            resultsView.insertBefore(feedbackContainer, returnBtn);
         }
 
         startQuiz();

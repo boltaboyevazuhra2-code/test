@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel — QuizHub</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #10b981; /* Emerald green for admin */
+            --bg: #0f172a;
+            --glass: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Outfit', sans-serif; }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .container { max-width: 1200px; margin: 0 auto; }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .header-title h2 { font-weight: 800; font-size: 2rem; color: var(--primary); }
+        .header-title p { color: var(--text-dim); }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 1px solid transparent;
+            font-size: 0.95rem;
+        }
+
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { opacity: 0.9; transform: translateY(-2px); }
+
+        .btn-outline { background: transparent; border-color: var(--primary); color: var(--primary); }
+        .btn-outline:hover { background: rgba(16, 185, 129, 0.1); }
+        
+        .btn-danger { background: transparent; border-color: var(--danger); color: var(--danger); }
+        .btn-danger:hover { background: var(--danger); color: white; }
+
+        .btn-edit { background: transparent; border-color: var(--warning); color: var(--warning); }
+        .btn-edit:hover { background: var(--warning); color: white; }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(5px);
+            display: none; align-items: center; justify-content: center;
+            z-index: 1000;
+        }
+        
+        .modal {
+            background: var(--bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            width: 100%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 2rem;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .form-group { margin-bottom: 1.5rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-dim); }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            color: white;
+            font-size: 1rem;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        /* Table Styles */
+        .table-container {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            overflow-x: auto;
+        }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 1.25rem 1.5rem; text-align: left; border-bottom: 1px solid var(--glass-border); }
+        th { color: var(--text-dim); font-weight: 600; font-size: 0.9rem; text-transform: uppercase; }
+        tr:last-child td { border-bottom: none; }
+        tbody tr:hover { background: rgba(255, 255, 255, 0.02); }
+
+        .correct-ans { color: var(--primary); font-weight: 600; }
+        
+        .actions { display: flex; gap: 0.5rem; }
+
+        @media (max-width: 768px) {
+            header { flex-direction: column; align-items: flex-start; gap: 1rem; }
+            th, td { padding: 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-title">
+                <h2>Admin Panel</h2>
+                <p>Savollarni boshqarish va tahrirlash</p>
+            </div>
+            <div style="display: flex; gap: 1rem;">
+                <button onclick="window.location.href='/dashboard'" class="btn btn-outline">Dashboard</button>
+                <button onclick="openManageCategoriesModal()" class="btn btn-outline">Fanlarni Boshqarish</button>
+                <button onclick="openCategoryModal()" class="btn btn-primary">+ Yangi Fan</button>
+                <button onclick="openModal()" class="btn btn-primary">+ Yangi Savol</button>
+            </div>
+        </header>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Kategoriya</th>
+                        <th>Savol</th>
+                        <th>To'g'ri Javob</th>
+                        <th>Amallar</th>
+                    </tr>
+                </thead>
+                <tbody id="questions-tbody">
+                    <tr><td colspan="5" style="text-align: center;">Yuklanmoqda...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="modal">
+            <h3 id="modal-title" style="margin-bottom: 1.5rem; font-size: 1.5rem;">Yangi Savol Qo'shish</h3>
+            <form id="question-form" onsubmit="saveQuestion(event)">
+                <input type="hidden" id="q_id">
+                
+                <div class="form-group">
+                    <label>Kategoriya</label>
+                    <select id="q_category" required></select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Savol matni</label>
+                    <input type="text" id="q_text" required placeholder="Savolni kiriting">
+                </div>
+
+                <div class="form-group">
+                    <label>A varianti</label>
+                    <input type="text" id="q_opt_a" required>
+                </div>
+                <div class="form-group">
+                    <label>B varianti</label>
+                    <input type="text" id="q_opt_b" required>
+                </div>
+                <div class="form-group">
+                    <label>C varianti</label>
+                    <input type="text" id="q_opt_c" required>
+                </div>
+                <div class="form-group">
+                    <label>D varianti</label>
+                    <input type="text" id="q_opt_d" required>
+                </div>
+
+                <div class="form-group">
+                    <label>To'g'ri Javob</label>
+                    <select id="q_correct" required>
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                        <option value="D">D</option>
+                    </select>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal()">Bekor qilish</button>
+                    <button type="submit" class="btn btn-primary">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Category Modal -->
+    <div class="modal-overlay" id="category-modal-overlay">
+        <div class="modal">
+            <h3 style="margin-bottom: 1.5rem; font-size: 1.5rem;">Yangi Fan Qo'shish</h3>
+            <form id="category-form" onsubmit="saveCategory(event)">
+                <div class="form-group">
+                    <label>Fan nomi</label>
+                    <input type="text" id="c_name" required placeholder="Fanni kiriting (masalan: Matematika)">
+                </div>
+                <div class="form-group">
+                    <label>Ikonka</label>
+                    <input type="text" id="c_icon" placeholder="Ikonka (masalan: 🧮)">
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeCategoryModal()">Bekor qilish</button>
+                    <button type="submit" class="btn btn-primary">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Manage Categories Modal -->
+    <div class="modal-overlay" id="manage-categories-modal-overlay">
+        <div class="modal">
+            <h3 style="margin-bottom: 1.5rem; font-size: 1.5rem;">Fanlarni Boshqarish</h3>
+            <div class="table-container" style="max-height: 400px; overflow-y: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Fan nomi</th>
+                            <th>Amallar</th>
+                        </tr>
+                    </thead>
+                    <tbody id="categories-tbody">
+                    </tbody>
+                </table>
+            </div>
+            <div style="display: flex; justify-content: flex-end; margin-top: 2rem;">
+                <button type="button" class="btn btn-primary" onclick="closeManageCategoriesModal()">Yopish</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let categories = [];
+        let questions = [];
+
+        async function loadData() {
+            const response = await fetch('/api/admin/questions');
+            if (response.status === 401) { window.location.href='/'; return; }
+            
+            const data = await response.json();
+            categories = data.categories;
+            questions = data.questions;
+
+            // Populate categories select
+            const catSelect = document.getElementById('q_category');
+            catSelect.innerHTML = categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+            renderTable();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('questions-tbody');
+            if (questions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Savollar yo\'q</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = questions.map(q => `
+                <tr>
+                    <td style="color: var(--text-dim);">#${q.id}</td>
+                    <td>${q.category_name}</td>
+                    <td style="max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${q.question}">${q.question}</td>
+                    <td class="correct-ans">${q['option_' + q.correct_answer.toLowerCase()]} (${q.correct_answer})</td>
+                    <td class="actions">
+                        <button class="btn btn-edit" onclick="editQuestion(${q.id})">Tahrir</button>
+                        <button class="btn btn-danger" onclick="deleteQuestion(${q.id})">O'chirish</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function openModal(qId = null) {
+            const modal = document.getElementById('modal-overlay');
+            const form = document.getElementById('question-form');
+            form.reset();
+
+            if (qId) {
+                const q = questions.find(x => x.id === qId);
+                document.getElementById('modal-title').textContent = 'Savolni Tahrirlash';
+                document.getElementById('q_id').value = q.id;
+                document.getElementById('q_category').value = q.category_id;
+                document.getElementById('q_text').value = q.question;
+                document.getElementById('q_opt_a').value = q.option_a;
+                document.getElementById('q_opt_b').value = q.option_b;
+                document.getElementById('q_opt_c').value = q.option_c;
+                document.getElementById('q_opt_d').value = q.option_d;
+                document.getElementById('q_correct').value = q.correct_answer;
+            } else {
+                document.getElementById('modal-title').textContent = 'Yangi Savol Qo\'shish';
+                document.getElementById('q_id').value = '';
+            }
+
+            modal.style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('modal-overlay').style.display = 'none';
+        }
+
+        function editQuestion(qId) {
+            openModal(qId);
+        }
+
+        async function saveQuestion(e) {
+            e.preventDefault();
+            
+            const qId = document.getElementById('q_id').value;
+            const method = qId ? 'PUT' : 'POST';
+            const url = qId ? `/api/admin/questions/${qId}` : '/api/admin/questions';
+
+            const payload = {
+                category_id: parseInt(document.getElementById('q_category').value),
+                question: document.getElementById('q_text').value,
+                option_a: document.getElementById('q_opt_a').value,
+                option_b: document.getElementById('q_opt_b').value,
+                option_c: document.getElementById('q_opt_c').value,
+                option_d: document.getElementById('q_opt_d').value,
+                correct_answer: document.getElementById('q_correct').value,
+                difficulty: 'medium'
+            };
+
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    closeModal();
+                    loadData();
+                } else {
+                    alert(data.error || 'Xatolik yuz berdi');
+                }
+            } catch (err) {
+                alert('Tarmoq xatosi');
+            }
+        }
+
+        async function deleteQuestion(qId) {
+            if (!confirm('Haqiqatan ham bu savolni o\'chirmoqchimisiz?')) return;
+            
+            try {
+                const res = await fetch(`/api/admin/questions/${qId}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    loadData();
+                } else {
+                    alert(data.error || 'Xatolik yuz berdi');
+                }
+            } catch (err) {
+                alert('Tarmoq xatosi');
+            }
+        }
+
+        function openCategoryModal() {
+            document.getElementById('category-form').reset();
+            document.getElementById('category-modal-overlay').style.display = 'flex';
+        }
+
+        function closeCategoryModal() {
+            document.getElementById('category-modal-overlay').style.display = 'none';
+        }
+
+        async function saveCategory(e) {
+            e.preventDefault();
+            const payload = {
+                name: document.getElementById('c_name').value,
+                icon: document.getElementById('c_icon').value || '📚'
+            };
+            try {
+                const res = await fetch('/api/admin/categories', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    closeCategoryModal();
+                    loadData();
+                } else {
+                    alert(data.error || 'Xatolik yuz berdi');
+                }
+            } catch (err) {
+                alert('Tarmoq xatosi');
+            }
+        }
+
+        function openManageCategoriesModal() {
+            renderCategoriesTable();
+            document.getElementById('manage-categories-modal-overlay').style.display = 'flex';
+        }
+
+        function closeManageCategoriesModal() {
+            document.getElementById('manage-categories-modal-overlay').style.display = 'none';
+        }
+
+        function renderCategoriesTable() {
+            const tbody = document.getElementById('categories-tbody');
+            if (categories.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">Fanlar yo\'q</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = categories.map(c => `
+                <tr>
+                    <td style="color: var(--text-dim);">#${c.id}</td>
+                    <td>${c.icon} ${c.name}</td>
+                    <td class="actions">
+                        <button class="btn btn-danger" onclick="deleteCategory(${c.id})">O'chirish</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function deleteCategory(cId) {
+            if (!confirm('Haqiqatan ham bu fanni o\'chirmoqchimisiz?\n\nDiqqat: Bu fanga tegishli barcha savollar va foydalanuvchi natijalari ham o\'chib ketadi!')) return;
+            
+            try {
+                const res = await fetch(`/api/admin/categories/${cId}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    await loadData();
+                    renderCategoriesTable();
+                } else {
+                    alert(data.error || 'Xatolik yuz berdi');
+                }
+            } catch (err) {
+                alert('Tarmoq xatosi');
+            }
+        }
+
+        loadData();
+    </script>
+</body>
+</html>
