@@ -8,7 +8,7 @@ from datetime import datetime
 app = Flask(__name__)
 app.secret_key = 'quiz_platform_secret_2024'
 
-DB_PATH = 'quiz.db'
+DB_PATH = os.environ.get('DB_PATH', '/home/quiz.db' if os.path.exists('/home') else 'quiz.db')
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
